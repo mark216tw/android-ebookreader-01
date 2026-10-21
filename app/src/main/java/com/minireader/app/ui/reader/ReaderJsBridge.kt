@@ -10,7 +10,10 @@ class ReaderJsBridge(
 
     @JavascriptInterface
     fun onScroll(ratio: Double) {
-        scrollHandler(ratio.toFloat().coerceIn(0f, 1f))
+        if (!ratio.isFinite()) return
+        val value = ratio.toFloat()
+        if (!value.isFinite()) return
+        scrollHandler(value.coerceIn(0f, 1f))
     }
 
     @JavascriptInterface

@@ -35,6 +35,8 @@ class EpubWebViewController {
     private var lastNavSignature = ""
     private var prefs = ReaderPrefs()
     private var colors = readerColors(prefs.theme)
+    @Volatile private var css = ReaderStyle.css(prefs, colors)
+    private var quotedCss = JSONObject.quote(css)
 
     private var onScroll: (Float) -> Unit = {}
     private var onInternalLink: (String, String?) -> Unit = { _, _ -> }
@@ -147,8 +149,12 @@ class EpubWebViewController {
         this.chapterCount = chapterCount
 
         val styleChanged = this.prefs != prefs || this.colors != colors
-        this.prefs = prefs
-        this.colors = colors
+        if (styleChanged) {
+            this.prefs = prefs
+            this.colors = colors
+            css = ReaderStyle.css(prefs, colors)
+            quotedCss = JSONObject.quote(css)
+        }
         view.setBackgroundColor(colors.background.toArgb())
 
         if (this.bookId != bookId || this.archive !== archive) {
@@ -159,7 +165,7 @@ class EpubWebViewController {
                 .setDomain(DOMAIN)
                 .addPathHandler(
                     "/epub/$bookId/",
-                    EpubAssetHandler(archive) { ReaderStyle.css(this.prefs, this.colors) },
+                    EpubAssetHandler(archive) { css },
                 )
                 .build()
         }
@@ -237,9 +243,8 @@ class EpubWebViewController {
     }
 
     private fun applyStyle(view: WebView) {
-        val css = ReaderStyle.css(prefs, colors)
         view.evaluateJavascript(
-            "window.__mrApplyStyle && window.__mrApplyStyle(${JSONObject.quote(css)});",
+            "window.__mrApplyStyle && window.__mrApplyStyle($quotedCss);",
             null,
         )
     }

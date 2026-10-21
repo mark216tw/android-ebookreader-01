@@ -20,8 +20,12 @@ class EpubAssetHandler(
     private val cssProvider: () -> String,
 ) : WebViewAssetLoader.PathHandler {
 
+    private val injector = HtmlInjector()
     private val cache = object : LruCache<String, ByteArray>(CACHE_SIZE_BYTES) {
         override fun sizeOf(key: String, value: ByteArray): Int = value.size
+    }
+    private val htmlCache = object : LruCache<String, CachedHtml>(HTML_CACHE_SIZE_BYTES) {
+        override fun sizeOf(key: String, value: CachedHtml): Int = value.body.size
     }
     private val cacheLock = Any()
 
@@ -30,11 +34,18 @@ class EpubAssetHandler(
         val entry = archive.findEntry(decoded) ?: return notFound()
 
         return if (MimeTypes.isHtml(entry.name)) {
-            val bytes = archive.readBytes(entry.name) ?: return notFound()
-            val html = HtmlDecoder.decode(bytes)
-            val injected = HtmlInjector().inject(html, cssProvider())
-            val body = injected.html.toByteArray(StandardCharsets.UTF_8)
-            val responseHeaders = headers(body.size.toLong())
+            val css = cssProvider()
+            val key = entry.name + '\u0000' + css
+            val injected = htmlCache.get(key) ?: run {
+                val bytes = archive.readBytes(entry.name) ?: return notFound()
+                val html = HtmlDecoder.decode(bytes)
+                val result = injector.inject(html, css)
+                CachedHtml(
+                    body = result.html.toByteArray(StandardCharsets.UTF_8),
+                    csp = result.csp,
+                ).also { htmlCache.put(key, it) }
+            }
+            val responseHeaders = headers(injected.body.size.toLong())
             responseHeaders["Content-Security-Policy"] = injected.csp
             WebResourceResponse(
                 "text/html",
@@ -42,7 +53,7 @@ class EpubAssetHandler(
                 200,
                 "OK",
                 responseHeaders,
-                ByteArrayInputStream(body),
+                ByteArrayInputStream(injected.body),
             )
         } else {
             val cached = cachedBytes(entry)
@@ -105,8 +116,14 @@ class EpubAssetHandler(
         )
     }
 
+    private data class CachedHtml(
+        val body: ByteArray,
+        val csp: String,
+    )
+
     private companion object {
         const val MAX_CACHED_ENTRY_BYTES = 2 * 1024 * 1024
         const val CACHE_SIZE_BYTES = 16 * 1024 * 1024
+        const val HTML_CACHE_SIZE_BYTES = 4 * 1024 * 1024
     }
 }

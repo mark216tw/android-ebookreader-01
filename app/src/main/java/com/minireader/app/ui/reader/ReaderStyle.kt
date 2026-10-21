@@ -173,7 +173,14 @@ object ReaderStyle {
 
           var swipeStartX = 0;
           var swipeStartY = 0;
+          var swipeStartTime = 0;
           var swipeActive = false;
+          var SWIPE_MIN_RATIO = 0.20;
+          var SWIPE_MIN_PX = 56;
+          var SWIPE_MAX_PX = 140;
+          var SWIPE_FLICK_RATIO = 0.08;
+          var SWIPE_FLICK_VELOCITY = 0.6;
+          var SWIPE_VERTICAL_RATIO = 1.5;
           window.__mrHasPrev = false;
           window.__mrHasNext = false;
 
@@ -184,6 +191,7 @@ object ReaderStyle {
             }
             swipeStartX = event.touches[0].clientX;
             swipeStartY = event.touches[0].clientY;
+            swipeStartTime = Date.now();
             swipeActive = true;
           }, { passive: true });
 
@@ -192,10 +200,21 @@ object ReaderStyle {
             swipeActive = false;
             var touch = event.changedTouches && event.changedTouches[0];
             if (!touch) return;
+            var elapsed = Date.now() - swipeStartTime;
             var dx = touch.clientX - swipeStartX;
             var dy = touch.clientY - swipeStartY;
-            if (Math.abs(dx) <= window.innerWidth / 2) return;
-            if (Math.abs(dx) <= Math.abs(dy) * 1.2) return;
+            var horizontal = Math.abs(dx);
+            var vertical = Math.abs(dy);
+            var velocity = elapsed > 0 ? horizontal / elapsed : 0;
+            var distance = Math.min(
+              SWIPE_MAX_PX,
+              Math.max(SWIPE_MIN_PX, window.innerWidth * SWIPE_MIN_RATIO)
+            );
+            var flickDistance = window.innerWidth * SWIPE_FLICK_RATIO;
+            var longEnough = horizontal >= distance;
+            var quickFlick = horizontal >= flickDistance && velocity >= SWIPE_FLICK_VELOCITY;
+            if (!longEnough && !quickFlick) return;
+            if (horizontal <= vertical * SWIPE_VERTICAL_RATIO) return;
             if (dx < 0) {
               if (window.__mrHasNext && window.Android && Android.onNextChapter) {
                 Android.onNextChapter();

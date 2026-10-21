@@ -89,10 +89,13 @@ import com.minireader.app.ui.icons.AppIcons
 import com.minireader.app.ui.system.SystemBarAppearance
 import com.minireader.app.ui.theme.readerColorScheme
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.roundToInt
+
+private val DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm")
 
 private val EPUB_MIME_TYPES = arrayOf(
     "application/epub+zip",
@@ -848,7 +851,9 @@ private fun relativeTime(timestamp: Long): String {
 }
 
 private fun formatDateTime(timestamp: Long): String {
-    return SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault()).format(Date(timestamp))
+    return Instant.ofEpochMilli(timestamp)
+        .atZone(ZoneId.systemDefault())
+        .format(DATE_TIME_FORMATTER)
 }
 
 private fun formatFileSize(bytes: Long): String = when {

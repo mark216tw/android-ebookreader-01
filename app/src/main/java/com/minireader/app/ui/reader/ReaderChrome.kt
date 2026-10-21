@@ -46,11 +46,15 @@ import com.minireader.app.data.epub.TocEntry
 import com.minireader.app.data.prefs.ReaderPrefs
 import com.minireader.app.ui.icons.AppIcons
 import com.minireader.app.ui.settings.ReaderSettingsContent
-import java.text.SimpleDateFormat
-import java.util.Date
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.roundToInt
 
 internal val ReaderTopBarHeight = 58.dp
+
+private val DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm")
 
 @Composable
 fun ReaderTopBar(
@@ -87,6 +91,13 @@ fun ReaderTopBar(
                     modifier = Modifier
                         .weight(1f)
                         .padding(horizontal = 4.dp),
+                )
+                Text(
+                    text = "${(progress.coerceIn(0f, 1f) * 100).roundToInt()}%",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = colors.secondary,
+                    maxLines = 1,
+                    modifier = Modifier.padding(horizontal = 6.dp),
                 )
                 IconButton(onClick = onAddBookmark) {
                     Icon(
@@ -370,5 +381,7 @@ fun ReaderSettingsSheet(
 }
 
 private fun formatBookmarkTime(timestamp: Long): String {
-    return SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault()).format(Date(timestamp))
+    return Instant.ofEpochMilli(timestamp)
+        .atZone(ZoneId.systemDefault())
+        .format(DATE_TIME_FORMATTER)
 }

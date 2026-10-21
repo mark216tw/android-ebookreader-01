@@ -11,6 +11,7 @@ import com.minireader.app.data.epub.EpubArchive
 import com.minireader.app.data.epub.EpubParser
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import java.security.MessageDigest
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
@@ -41,17 +42,16 @@ class BookImporter(
             }
 
             val bookId = UUID.randomUUID().toString()
-            val parsed = EpubArchive(tempFile).use { archive ->
-                EpubParser().parse(archive)
-            }
-
             val booksDirectory = File(context.filesDir, "books").apply { mkdirs() }
             val coversDirectory = File(context.filesDir, "covers").apply { mkdirs() }
             coverFile = File(coversDirectory, "$bookId.jpg")
-            val coverPath = if (parsed.coverEntryPath != null) {
-                extractCover(archivePath = tempFile, entryPath = parsed.coverEntryPath, output = coverFile)
-            } else {
-                null
+
+            val (parsed, coverPath) = EpubArchive(tempFile).use { archive ->
+                val book = EpubParser().parse(archive)
+                val cover = book.coverEntryPath?.let { entryPath ->
+                    extractCover(archive, entryPath, coverFile)
+                }
+                book to cover
             }
 
             val target = File(booksDirectory, "$bookId.epub")
@@ -101,9 +101,14 @@ class BookImporter(
         input.use { source ->
             FileOutputStream(target).use { output ->
                 val buffer = ByteArray(64 * 1024)
+                var total = 0L
                 while (true) {
                     val read = source.read(buffer)
                     if (read < 0) break
+                    total += read
+                    if (total > MAX_EPUB_BYTES) {
+                        throw IOException("檔案過大，無法匯入")
+                    }
                     digest.update(buffer, 0, read)
                     output.write(buffer, 0, read)
                 }
@@ -112,33 +117,27 @@ class BookImporter(
         return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
-    /**
-     * Opens the EPUB again for cover extraction so the caller does not need to
-     * keep the archive alive after parsing.
-     */
-    private fun extractCover(archivePath: File, entryPath: String, output: File): String? {
+    private fun extractCover(archive: EpubArchive, entryPath: String, output: File): String? {
         return try {
-            EpubArchive(archivePath).use { archive ->
-                val bytes = archive.readBytes(entryPath) ?: return null
-                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-                if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+            val bytes = archive.readBytes(entryPath) ?: return null
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
 
-                var sampleSize = 1
-                while (bounds.outWidth / sampleSize > 900 || bounds.outHeight / sampleSize > 1400) {
-                    sampleSize *= 2
+            var sampleSize = 1
+            while (bounds.outWidth / sampleSize > 900 || bounds.outHeight / sampleSize > 1400) {
+                sampleSize *= 2
+            }
+            val options = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+            val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+                ?: return null
+            try {
+                FileOutputStream(output).use { stream ->
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 86, stream)
                 }
-                val options = BitmapFactory.Options().apply { inSampleSize = sampleSize }
-                val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
-                    ?: return null
-                try {
-                    FileOutputStream(output).use { stream ->
-                        bitmap.compress(Bitmap.CompressFormat.JPEG, 86, stream)
-                    }
-                    output.absolutePath
-                } finally {
-                    bitmap.recycle()
-                }
+                output.absolutePath
+            } finally {
+                bitmap.recycle()
             }
         } catch (_: Exception) {
             output.delete()
@@ -163,5 +162,9 @@ class BookImporter(
         } catch (_: Exception) {
             uri.lastPathSegment?.substringAfterLast('/')
         }
+    }
+
+    private companion object {
+        const val MAX_EPUB_BYTES = 300L * 1024 * 1024
     }
 }

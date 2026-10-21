@@ -20,7 +20,9 @@ import java.text.Collator
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -163,15 +165,23 @@ class ShelfViewModel(application: Application) : AndroidViewModel(application) {
     fun importBooks(uris: List<Uri>) {
         if (uris.isEmpty()) return
         if (_importState.value.running) return
+        val accepted = if (uris.size > MAX_IMPORT_BATCH) {
+            messagesChannel.trySend(
+                "一次最多匯入 $MAX_IMPORT_BATCH 本，已忽略其餘 ${uris.size - MAX_IMPORT_BATCH} 本",
+            )
+            uris.take(MAX_IMPORT_BATCH)
+        } else {
+            uris
+        }
         viewModelScope.launch {
             _importState.value = ImportUiState(
                 running = true,
-                total = uris.size,
+                total = accepted.size,
             )
             var success = 0
             var duplicate = 0
             val errors = mutableListOf<String>()
-            uris.forEachIndexed { index, uri ->
+            accepted.forEachIndexed { index, uri ->
                 when (val result = importer.import(uri)) {
                     is ImportOutcome.Success -> success++
                     is ImportOutcome.Duplicate -> duplicate++
@@ -179,7 +189,7 @@ class ShelfViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 _importState.value = ImportUiState(
                     running = true,
-                    total = uris.size,
+                    total = accepted.size,
                     processed = index + 1,
                     success = success,
                     duplicate = duplicate,
@@ -190,8 +200,8 @@ class ShelfViewModel(application: Application) : AndroidViewModel(application) {
             _importState.value = ImportUiState(
                 running = false,
                 finished = true,
-                processed = uris.size,
-                total = uris.size,
+                processed = accepted.size,
+                total = accepted.size,
                 success = success,
                 duplicate = duplicate,
                 failure = errors.size,
@@ -236,28 +246,37 @@ class ShelfViewModel(application: Application) : AndroidViewModel(application) {
                 runCatching {
                     val file = File(book.filePath)
                     if (!file.exists()) return@runCatching null
-                    val parsed = metadataCache.get(book.fileHash)
-                        ?: EpubArchive(file).use { archive ->
-                            EpubParser().parse(archive).also {
-                                metadataCache.put(book.fileHash, it)
+                    coroutineScope {
+                        val bookmarkCount = async { repository.bookmarkCount(book.id) }
+                        val cachedBook = metadataCache.get(book.fileHash)
+                        val cachedWordCount = wordCountCache[book.fileHash]
+                        val (parsed, wordCount) =
+                            if (cachedBook != null && cachedWordCount != null) {
+                                cachedBook to cachedWordCount
+                            } else {
+                                EpubArchive(file).use { archive ->
+                                    val info = cachedBook
+                                        ?: EpubParser().parse(archive).also {
+                                            metadataCache.put(book.fileHash, it)
+                                        }
+                                    val count = cachedWordCount
+                                        ?: EpubTextStats.countWords(archive, info.chapters).also {
+                                            wordCountCache[book.fileHash] = it
+                                        }
+                                    info to count
+                                }
                             }
-                        }
-                    val wordCount = wordCountCache[book.fileHash]
-                        ?: EpubArchive(file).use { archive ->
-                            EpubTextStats.countWords(archive, parsed.chapters).also {
-                                wordCountCache[book.fileHash] = it
-                            }
-                        }
-                    val chapterIndex = parsed.chapters
-                        .indexOfFirst { it.href == book.progressHref }
-                    BookDetails(
-                        language = parsed.language,
-                        wordCount = wordCount,
-                        chapterCount = parsed.chapters.size,
-                        chapterIndex = chapterIndex,
-                        chapterTitle = parsed.chapters.getOrNull(chapterIndex)?.title,
-                        bookmarkCount = repository.bookmarkCount(book.id),
-                    )
+                        val chapterIndex = parsed.chapters
+                            .indexOfFirst { it.href == book.progressHref }
+                        BookDetails(
+                            language = parsed.language,
+                            wordCount = wordCount,
+                            chapterCount = parsed.chapters.size,
+                            chapterIndex = chapterIndex,
+                            chapterTitle = parsed.chapters.getOrNull(chapterIndex)?.title,
+                            bookmarkCount = bookmarkCount.await(),
+                        )
+                    }
                 }.getOrNull()
             }
             onLoaded(details)
@@ -288,5 +307,9 @@ class ShelfViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             repository.deleteTag(tag)
         }
+    }
+
+    private companion object {
+        const val MAX_IMPORT_BATCH = 20
     }
 }

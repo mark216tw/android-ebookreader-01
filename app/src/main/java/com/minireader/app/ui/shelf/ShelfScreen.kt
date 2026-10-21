@@ -94,6 +94,12 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
 
+private val EPUB_MIME_TYPES = arrayOf(
+    "application/epub+zip",
+    "application/zip",
+    "application/octet-stream",
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ShelfScreen(
@@ -185,7 +191,7 @@ fun ShelfScreen(
                     }
                     IconButton(
                         onClick = {
-                            importLauncher.launch(arrayOf("application/epub+zip", "*/*"))
+                            importLauncher.launch(EPUB_MIME_TYPES)
                         },
                     ) {
                         Icon(Icons.Default.Add, contentDescription = "匯入 EPUB")
@@ -321,7 +327,7 @@ fun ShelfScreen(
                     EmptyShelf(
                         filtered = state.query.isNotBlank() || state.selectedTagId != null,
                         onImport = {
-                            importLauncher.launch(arrayOf("application/epub+zip", "*/*"))
+                            importLauncher.launch(EPUB_MIME_TYPES)
                         },
                     )
                 }
@@ -578,22 +584,21 @@ private fun BookCard(
                 .background(MaterialTheme.colorScheme.surfaceVariant),
         ) {
             val coverPath = book.coverPath
-            if (!coverPath.isNullOrBlank() && File(coverPath).exists()) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Icon(
+                    Icons.Default.List,
+                    contentDescription = null,
+                    modifier = Modifier.size(42.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (!coverPath.isNullOrBlank()) {
                 AsyncImage(
                     model = File(coverPath),
                     contentDescription = book.displayTitle,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                 )
-            } else {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Icon(
-                        Icons.Default.List,
-                        contentDescription = null,
-                        modifier = Modifier.size(42.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
             }
             if (book.progressFraction > 0f) {
                 LinearProgressIndicator(

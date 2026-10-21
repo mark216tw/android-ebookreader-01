@@ -11,7 +11,7 @@ object EpubTextStats {
         var total = 0
         for (chapter in chapters) {
             val bytes = archive.readBytes(chapter.href) ?: continue
-            total += countWordsInHtml(String(bytes, Charsets.UTF_8))
+            total += countWordsInHtml(HtmlDecoder.decode(bytes))
         }
         return total
     }

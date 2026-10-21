@@ -71,7 +71,7 @@ object ReaderStyle {
               text-align: $alignment !important;
               $justifyRule
               margin: 0 !important;
-              padding: 8px var(--mr-margin-x) 24px var(--mr-margin-x) !important;
+              padding: 8px var(--mr-margin-x) 12px var(--mr-margin-x) !important;
               word-wrap: break-word !important;
               overflow-wrap: break-word !important;
               -webkit-font-smoothing: antialiased;
@@ -167,19 +167,6 @@ object ReaderStyle {
             }
           }, { passive: true });
 
-          var suppressTapUntil = 0;
-          document.addEventListener('click', function (event) {
-            if (Date.now() < suppressTapUntil) return;
-            var target = event.target;
-            var interactive = target && target.closest
-              ? target.closest('a, button, .mr-chapter-nav')
-              : null;
-            if (interactive) return;
-            if (window.Android && Android.onTap) {
-              Android.onTap();
-            }
-          }, false);
-
           var userMoved = false;
           window.addEventListener('touchstart', function () { userMoved = true; }, { passive: true });
           window.addEventListener('wheel', function () { userMoved = true; }, { passive: true });
@@ -209,13 +196,12 @@ object ReaderStyle {
             var dy = touch.clientY - swipeStartY;
             if (Math.abs(dx) <= window.innerWidth / 2) return;
             if (Math.abs(dx) <= Math.abs(dy) * 1.2) return;
-            suppressTapUntil = Date.now() + 400;
             if (dx < 0) {
-              if (window.__mrHasPrev && window.Android && Android.onPreviousChapter) {
-                Android.onPreviousChapter();
+              if (window.__mrHasNext && window.Android && Android.onNextChapter) {
+                Android.onNextChapter();
               }
-            } else if (window.__mrHasNext && window.Android && Android.onNextChapter) {
-              Android.onNextChapter();
+            } else if (window.__mrHasPrev && window.Android && Android.onPreviousChapter) {
+              Android.onPreviousChapter();
             }
           }, { passive: true });
 
@@ -256,6 +242,18 @@ object ReaderStyle {
           window.__mrUpdateStyle = function (css) {
             var style = document.getElementById('mr-style');
             if (style) style.textContent = css;
+          };
+
+          window.__mrApplyStyle = function (css) {
+            var doc = document.documentElement;
+            var max = Math.max(0, doc.scrollHeight - window.innerHeight);
+            var ratio = max > 0 ? Math.min(1, Math.max(0, window.scrollY / max)) : 0;
+            window.__mrUpdateStyle(css);
+            requestAnimationFrame(function () {
+              var nextDoc = document.documentElement;
+              var nextMax = Math.max(0, nextDoc.scrollHeight - window.innerHeight);
+              window.scrollTo(0, nextMax * ratio);
+            });
           };
 
           window.__mrScrollToFragment = function (fragment) {

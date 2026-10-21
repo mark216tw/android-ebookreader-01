@@ -17,9 +17,12 @@ class HtmlInjectorTest {
         """.trimIndent()
 
         val injected = HtmlInjector().inject(html, "body { color: red; }")
-        File("build/injected-test.html").writeText(injected, Charsets.UTF_8)
-        assertTrue(injected.contains("<style id=\"mr-style\">"))
-        assertTrue(injected.contains("window.__mrCaptureExcerpt"))
-        assertTrue(injected.indexOf("<script>") < injected.lastIndexOf("</body>"))
+        File("build/injected-test.html").writeText(injected.html, Charsets.UTF_8)
+        assertTrue(injected.html.contains("<style id=\"mr-style\">"))
+        assertTrue(injected.html.contains("window.__mrCaptureExcerpt"))
+        assertTrue(injected.html.contains("<script nonce=\""))
+        assertTrue(injected.csp.contains("script-src 'nonce-"))
+        assertTrue(injected.csp.contains("default-src 'none'"))
+        assertTrue(injected.html.indexOf("<script nonce=") < injected.html.lastIndexOf("</body>"))
     }
 }

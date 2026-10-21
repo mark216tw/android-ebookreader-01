@@ -2,11 +2,6 @@ package com.minireader.app.ui.reader
 
 import android.content.Intent
 import android.view.WindowManager
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -73,17 +68,11 @@ fun ReaderScreen(
     val snackbarHost = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    var chromeVisible by remember { mutableStateOf(true) }
     var showToc by remember { mutableStateOf(false) }
     var showBookmarks by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var externalUrl by remember { mutableStateOf<String?>(null) }
     var bookmarkExcerpt by remember { mutableStateOf<String?>(null) }
-    val topBarInset by animateDpAsState(
-        targetValue = if (chromeVisible) ReaderTopBarHeight else 0.dp,
-        animationSpec = tween(durationMillis = 180),
-        label = "readerTopBarInset",
-    )
 
     DisposableEffect(Unit) {
         val observer = LifecycleEventObserver { _, event ->
@@ -156,7 +145,6 @@ fun ReaderScreen(
                         colors = colors,
                         controller = controller,
                         onScroll = viewModel::onScroll,
-                        onTap = { chromeVisible = !chromeVisible },
                         onInternalLink = viewModel::jumpToPath,
                         onExternalLink = { externalUrl = it },
                         onReady = {},
@@ -165,28 +153,21 @@ fun ReaderScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .systemBarsPadding()
-                            .padding(top = topBarInset),
+                            .padding(top = ReaderTopBarHeight),
                     )
 
-                    AnimatedVisibility(
-                        visible = chromeVisible,
-                        enter = fadeIn(),
-                        exit = fadeOut(),
-                        modifier = Modifier.align(Alignment.TopCenter),
-                    ) {
-                        ReaderTopBar(
-                            title = state.book?.displayTitle ?: "mini閱讀器",
-                            progress = state.bookProgress,
-                            colors = colors,
-                            onBack = {
-                                viewModel.persistNow()
-                                onBack()
-                            },
-                            onAddBookmark = { showBookmarks = true },
-                            onOpenToc = { showToc = true },
-                            onOpenSettings = { showSettings = true },
-                        )
-                    }
+                    ReaderTopBar(
+                        title = state.book?.displayTitle ?: "mini閱讀器",
+                        progress = state.bookProgress,
+                        colors = colors,
+                        onBack = {
+                            viewModel.persistNow()
+                            onBack()
+                        },
+                        onAddBookmark = { showBookmarks = true },
+                        onOpenToc = { showToc = true },
+                        onOpenSettings = { showSettings = true },
+                    )
 
                 }
             }

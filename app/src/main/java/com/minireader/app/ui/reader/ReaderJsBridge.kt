@@ -4,7 +4,6 @@ import android.webkit.JavascriptInterface
 
 class ReaderJsBridge(
     private val scrollHandler: (Float) -> Unit,
-    private val tapHandler: () -> Unit,
     private val previousChapterHandler: () -> Unit,
     private val nextChapterHandler: () -> Unit,
 ) {
@@ -12,11 +11,6 @@ class ReaderJsBridge(
     @JavascriptInterface
     fun onScroll(ratio: Double) {
         scrollHandler(ratio.toFloat().coerceIn(0f, 1f))
-    }
-
-    @JavascriptInterface
-    fun onTap() {
-        tapHandler()
     }
 
     @JavascriptInterface

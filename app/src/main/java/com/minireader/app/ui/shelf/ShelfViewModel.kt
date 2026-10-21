@@ -18,6 +18,7 @@ import com.minireader.app.data.repository.ShelfBook
 import java.io.File
 import java.text.Collator
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,6 +26,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -59,6 +61,8 @@ class ShelfViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = container.repository
     private val importer = container.importer
     private val preferences = container.preferences
+    private val metadataCache = container.epubMetadata
+    private val wordCountCache = ConcurrentHashMap<String, Int>()
 
     private val query = MutableStateFlow("")
     private val selectedTagId = MutableStateFlow<String?>(null)
@@ -136,7 +140,7 @@ class ShelfViewModel(application: Application) : AndroidViewModel(application) {
             darkTheme = prefs.darkTheme,
             displayMode = prefs.displayMode,
         )
-    }.stateIn(
+    }.flowOn(Dispatchers.Default).stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = ShelfUiState(),
@@ -232,19 +236,28 @@ class ShelfViewModel(application: Application) : AndroidViewModel(application) {
                 runCatching {
                     val file = File(book.filePath)
                     if (!file.exists()) return@runCatching null
-                    EpubArchive(file).use { archive ->
-                        val parsed = EpubParser().parse(archive)
-                        val chapterIndex = parsed.chapters
-                            .indexOfFirst { it.href == book.progressHref }
-                        BookDetails(
-                            language = parsed.language,
-                            wordCount = EpubTextStats.countWords(archive, parsed.chapters),
-                            chapterCount = parsed.chapters.size,
-                            chapterIndex = chapterIndex,
-                            chapterTitle = parsed.chapters.getOrNull(chapterIndex)?.title,
-                            bookmarkCount = repository.bookmarkCount(book.id),
-                        )
-                    }
+                    val parsed = metadataCache.get(book.fileHash)
+                        ?: EpubArchive(file).use { archive ->
+                            EpubParser().parse(archive).also {
+                                metadataCache.put(book.fileHash, it)
+                            }
+                        }
+                    val wordCount = wordCountCache[book.fileHash]
+                        ?: EpubArchive(file).use { archive ->
+                            EpubTextStats.countWords(archive, parsed.chapters).also {
+                                wordCountCache[book.fileHash] = it
+                            }
+                        }
+                    val chapterIndex = parsed.chapters
+                        .indexOfFirst { it.href == book.progressHref }
+                    BookDetails(
+                        language = parsed.language,
+                        wordCount = wordCount,
+                        chapterCount = parsed.chapters.size,
+                        chapterIndex = chapterIndex,
+                        chapterTitle = parsed.chapters.getOrNull(chapterIndex)?.title,
+                        bookmarkCount = repository.bookmarkCount(book.id),
+                    )
                 }.getOrNull()
             }
             onLoaded(details)

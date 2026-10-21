@@ -15,6 +15,7 @@ import com.minireader.app.data.epub.EpubParser
 import com.minireader.app.data.epub.TocEntry
 import com.minireader.app.data.prefs.ReaderPrefs
 import java.io.File
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -49,6 +50,7 @@ class ReaderViewModel(
     private val container = (application as MiniReaderApp).container
     private val repository = container.repository
     private val preferences = container.preferences
+    private val applicationScope = container.applicationScope
 
     private val _uiState = MutableStateFlow(ReaderUiState())
     val uiState: StateFlow<ReaderUiState> = _uiState.asStateFlow()
@@ -96,7 +98,11 @@ class ReaderViewModel(
                 val (openedArchive, parsed) = withContext(Dispatchers.IO) {
                     val archive = EpubArchive(file)
                     try {
-                        archive to EpubParser().parse(archive)
+                        val parsedBook = container.epubMetadata.get(book.fileHash)
+                            ?: EpubParser().parse(archive).also {
+                                container.epubMetadata.put(book.fileHash, it)
+                            }
+                        archive to parsedBook
                     } catch (exception: Exception) {
                         runCatching { archive.close() }
                         throw exception
@@ -167,16 +173,16 @@ class ReaderViewModel(
 
     fun persistNow() {
         persistJob?.cancel()
-        saveSnapshot()
+        saveSnapshot(applicationScope)
     }
 
-    private fun saveSnapshot() {
+    private fun saveSnapshot(scope: CoroutineScope = viewModelScope) {
         val state = _uiState.value
         val chapter = state.chapters.getOrNull(state.chapterIndex) ?: return
         val ratio = currentRatio
         val fraction = ((state.chapterIndex + ratio) / state.chapters.size)
             .coerceIn(0f, 1f)
-        viewModelScope.launch {
+        scope.launch {
             repository.saveProgress(bookId, chapter.href, ratio, fraction)
         }
     }
@@ -261,6 +267,7 @@ class ReaderViewModel(
 
     override fun onCleared() {
         persistJob?.cancel()
+        saveSnapshot(applicationScope)
         runCatching { archive?.close() }
         archive = null
         super.onCleared()

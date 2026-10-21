@@ -29,7 +29,6 @@ class EpubWebViewController {
     private var pendingUrl: String? = null
     private var pendingRatio = 0f
     private var pendingFragment: String? = null
-    private var lastRatio = 0f
     private var lastNavigationToken = Long.MIN_VALUE
     private var chapterIndex = 0
     private var chapterCount = 0
@@ -38,7 +37,6 @@ class EpubWebViewController {
     private var colors = readerColors(prefs.theme)
 
     private var onScroll: (Float) -> Unit = {}
-    private var onTap: () -> Unit = {}
     private var onInternalLink: (String, String?) -> Unit = { _, _ -> }
     private var onExternalLink: (String) -> Unit = {}
     private var onReady: () -> Unit = {}
@@ -73,12 +71,8 @@ class EpubWebViewController {
             ReaderJsBridge(
                 scrollHandler = { ratio ->
                     view.post {
-                        lastRatio = ratio
                         onScroll(ratio)
                     }
-                },
-                tapHandler = {
-                    view.post { onTap() }
                 },
                 previousChapterHandler = {
                     view.post { onPreviousChapter() }
@@ -136,7 +130,6 @@ class EpubWebViewController {
         prefs: ReaderPrefs,
         colors: ReaderColors,
         onScroll: (Float) -> Unit,
-        onTap: () -> Unit,
         onInternalLink: (String, String?) -> Unit,
         onExternalLink: (String) -> Unit,
         onReady: () -> Unit,
@@ -145,7 +138,6 @@ class EpubWebViewController {
     ) {
         val view = webView ?: return
         this.onScroll = onScroll
-        this.onTap = onTap
         this.onInternalLink = onInternalLink
         this.onExternalLink = onExternalLink
         this.onReady = onReady
@@ -174,7 +166,6 @@ class EpubWebViewController {
 
         if (loadedHref != chapter.href) {
             loadedHref = chapter.href
-            lastRatio = restoreRatio
             pendingRatio = restoreRatio
             pendingFragment = restoreFragment
             lastNavigationToken = navigationToken
@@ -194,7 +185,6 @@ class EpubWebViewController {
 
         if (navigationToken != lastNavigationToken) {
             lastNavigationToken = navigationToken
-            lastRatio = restoreRatio
             if (restoreFragment != null) {
                 scrollToFragment(restoreFragment)
             } else {
@@ -249,8 +239,7 @@ class EpubWebViewController {
     private fun applyStyle(view: WebView) {
         val css = ReaderStyle.css(prefs, colors)
         view.evaluateJavascript(
-            "window.__mrUpdateStyle && window.__mrUpdateStyle(${JSONObject.quote(css)}); " +
-                "window.__mrRestore && window.__mrRestore(${lastRatio}, null);",
+            "window.__mrApplyStyle && window.__mrApplyStyle(${JSONObject.quote(css)});",
             null,
         )
     }

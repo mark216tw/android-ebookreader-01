@@ -24,7 +24,6 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         fun create(context: Context): AppDatabase {
             return Room.databaseBuilder(context, AppDatabase::class.java, "minireader.db")
-                .fallbackToDestructiveMigration()
                 .build()
         }
     }

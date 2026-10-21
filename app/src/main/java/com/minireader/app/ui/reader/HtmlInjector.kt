@@ -1,5 +1,12 @@
 package com.minireader.app.ui.reader
 
+import java.util.UUID
+
+data class InjectedHtml(
+    val html: String,
+    val csp: String,
+)
+
 /**
  * Injects the reader stylesheet and the small JavaScript bridge used for
  * scroll reporting, restoring positions and creating bookmark excerpts.
@@ -10,11 +17,16 @@ package com.minireader.app.ui.reader
  */
 class HtmlInjector {
 
-    fun inject(html: String, css: String): String {
+    fun inject(html: String, css: String): InjectedHtml {
+        val nonce = UUID.randomUUID().toString().replace("-", "")
+        val csp = buildCsp(nonce)
         val safeHtml = stripDangerousContent(html)
         val headContent = buildString {
             append("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, ")
             append("maximum-scale=1.0, user-scalable=no\">")
+            append("<meta http-equiv=\"Content-Security-Policy\" content=\"")
+            append(csp)
+            append("\">")
             append("<style id=\"mr-style\">")
             append(css)
             append("</style>")
@@ -34,14 +46,29 @@ class HtmlInjector {
             else -> headContent + safeHtml
         }
 
-        val script = "<script>" + ReaderStyle.javascript() + "</script>"
+        val script = "<script nonce=\"$nonce\">" + ReaderStyle.javascript() + "</script>"
         val bodyMatch = BODY_CLOSE.find(withHead)
-        return if (bodyMatch != null) {
+        val result = if (bodyMatch != null) {
             val start = bodyMatch.range.first
             withHead.substring(0, start) + script + withHead.substring(start)
         } else {
             withHead + script
         }
+        return InjectedHtml(html = result, csp = csp)
+    }
+
+    private fun buildCsp(nonce: String): String {
+        return "default-src 'none'; " +
+            "script-src 'nonce-$nonce'; " +
+            "style-src 'self' 'unsafe-inline'; " +
+            "img-src 'self' data: blob:; " +
+            "font-src 'self' data:; " +
+            "media-src 'self'; " +
+            "connect-src 'none'; " +
+            "frame-src 'none'; " +
+            "object-src 'none'; " +
+            "base-uri 'none'; " +
+            "form-action 'none'"
     }
 
     private fun stripDangerousContent(html: String): String {

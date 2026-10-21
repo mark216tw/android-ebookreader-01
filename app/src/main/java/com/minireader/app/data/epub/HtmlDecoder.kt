@@ -1,4 +1,4 @@
-package com.minireader.app.ui.reader
+package com.minireader.app.data.epub
 
 import java.nio.charset.Charset
 import java.nio.charset.StandardCharsets

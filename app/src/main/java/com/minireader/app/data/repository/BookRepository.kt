@@ -89,7 +89,7 @@ class BookRepository(
         require(trimmed.isNotEmpty()) { "標籤名稱不能為空" }
         tagDao.findByName(trimmed)?.let { return it }
         val tag = TagEntity(id = UUID.randomUUID().toString(), name = trimmed, color = color)
-        tagDao.upsert(tag)
+        tagDao.insert(tag)
         return tag
     }
 
@@ -103,7 +103,7 @@ class BookRepository(
             return Result.failure(IllegalArgumentException("已有同名標籤"))
         }
         val updated = tag.copy(name = trimmed, color = color)
-        tagDao.upsert(updated)
+        tagDao.update(updated)
         return Result.success(updated)
     }
 

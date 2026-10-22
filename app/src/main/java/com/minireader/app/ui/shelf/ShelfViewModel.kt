@@ -12,6 +12,7 @@ import com.minireader.app.data.epub.EpubParser
 import com.minireader.app.data.epub.EpubTextStats
 import com.minireader.app.data.prefs.DisplayMode
 import com.minireader.app.data.prefs.ReaderTheme
+import com.minireader.app.data.prefs.ShelfLayout
 import com.minireader.app.data.prefs.ShelfSort
 import com.minireader.app.data.repository.ImportOutcome
 import com.minireader.app.data.repository.ShelfBook
@@ -38,6 +39,7 @@ data class ShelfUiState(
     val books: List<ShelfBook> = emptyList(),
     val tags: List<TagEntity> = emptyList(),
     val sortOrder: ShelfSort = ShelfSort.ADDED_DESC,
+    val shelfLayout: ShelfLayout = ShelfLayout.GRID,
     val query: String = "",
     val selectedTagId: String? = null,
     val loading: Boolean = true,
@@ -135,6 +137,7 @@ class ShelfViewModel(application: Application) : AndroidViewModel(application) {
             books = sorted,
             tags = tags,
             sortOrder = prefs.sortOrder,
+            shelfLayout = prefs.shelfLayout,
             query = currentQuery,
             selectedTagId = tagId,
             loading = false,
@@ -159,6 +162,12 @@ class ShelfViewModel(application: Application) : AndroidViewModel(application) {
     fun setSortOrder(sort: ShelfSort) {
         viewModelScope.launch {
             preferences.update { it.copy(sortOrder = sort) }
+        }
+    }
+
+    fun setShelfLayout(layout: ShelfLayout) {
+        viewModelScope.launch {
+            preferences.update { it.copy(shelfLayout = layout) }
         }
     }
 

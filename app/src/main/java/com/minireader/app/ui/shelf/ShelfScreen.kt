@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -82,6 +83,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.minireader.app.data.db.BookEntity
+import com.minireader.app.data.prefs.ShelfLayout
 import com.minireader.app.data.prefs.ShelfSort
 import com.minireader.app.data.prefs.resolveDark
 import com.minireader.app.data.repository.ShelfBook
@@ -181,6 +183,30 @@ fun ShelfScreen(
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = {
+                            viewModel.setShelfLayout(
+                                if (state.shelfLayout == ShelfLayout.GRID) {
+                                    ShelfLayout.COMPACT
+                                } else {
+                                    ShelfLayout.GRID
+                                },
+                            )
+                        },
+                    ) {
+                        Icon(
+                            imageVector = if (state.shelfLayout == ShelfLayout.GRID) {
+                                AppIcons.Compact
+                            } else {
+                                AppIcons.Grid
+                            },
+                            contentDescription = if (state.shelfLayout == ShelfLayout.GRID) {
+                                "切換為緊湊顯示"
+                            } else {
+                                "切換為網格顯示"
+                            },
+                        )
+                    }
                     IconButton(
                         onClick = {
                             searchVisible = !searchVisible
@@ -334,7 +360,7 @@ fun ShelfScreen(
                         },
                     )
                 }
-                else -> {
+                state.shelfLayout == ShelfLayout.GRID -> {
                     LazyVerticalGrid(
                         columns = GridCells.Adaptive(minSize = 112.dp),
                         contentPadding = PaddingValues(
@@ -349,6 +375,26 @@ fun ShelfScreen(
                     ) {
                         items(state.books, key = { it.book.id }) { shelfBook ->
                             BookCard(
+                                shelfBook = shelfBook,
+                                onClick = { onOpenBook(shelfBook.book.id) },
+                                onLongClick = { actionBook = shelfBook },
+                            )
+                        }
+                    }
+                }
+                else -> {
+                    LazyColumn(
+                        contentPadding = PaddingValues(
+                            start = 16.dp,
+                            end = 16.dp,
+                            top = 12.dp,
+                            bottom = 112.dp,
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        items(state.books, key = { it.book.id }) { shelfBook ->
+                            CompactBookRow(
                                 shelfBook = shelfBook,
                                 onClick = { onOpenBook(shelfBook.book.id) },
                                 onLongClick = { actionBook = shelfBook },
@@ -579,55 +625,13 @@ private fun BookCard(
             .fillMaxWidth()
             .combinedClickable(onClick = onClick, onLongClick = onLongClick),
     ) {
-        Box(
+        BookCover(
+            book = book,
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(0.68f)
-                .clip(RoundedCornerShape(10.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-        ) {
-            val coverPath = book.coverPath
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Icon(
-                    Icons.Default.List,
-                    contentDescription = null,
-                    modifier = Modifier.size(42.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            if (!coverPath.isNullOrBlank()) {
-                AsyncImage(
-                    model = File(coverPath),
-                    contentDescription = book.displayTitle,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-            if (book.progressFraction > 0f) {
-                LinearProgressIndicator(
-                    progress = { book.progressFraction },
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .height(4.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = Color.Black.copy(alpha = 0.2f),
-                )
-            }
-            bookStatusLabel(book)?.let { status ->
-                Text(
-                    text = status,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(6.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.92f))
-                        .padding(horizontal = 5.dp, vertical = 1.dp),
-                )
-            }
-        }
+                .aspectRatio(0.68f),
+            showStatus = true,
+        )
         Spacer(Modifier.height(6.dp))
         Text(
             text = book.displayTitle,
@@ -652,6 +656,104 @@ private fun BookCard(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(top = 2.dp),
             )
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun CompactBookRow(
+    shelfBook: ShelfBook,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
+    val book = shelfBook.book
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .padding(horizontal = 4.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = book.displayTitle,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = book.author?.takeIf { it.isNotBlank() } ?: "未知作者",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Text(
+            text = "${(book.progressFraction * 100).roundToInt()}%",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun BookCover(
+    book: BookEntity,
+    modifier: Modifier = Modifier,
+    showStatus: Boolean = false,
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        val coverPath = book.coverPath
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Icon(
+                Icons.Default.List,
+                contentDescription = null,
+                modifier = Modifier.size(42.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (!coverPath.isNullOrBlank()) {
+            AsyncImage(
+                model = File(coverPath),
+                contentDescription = book.displayTitle,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        if (showStatus) {
+            if (book.progressFraction > 0f) {
+                LinearProgressIndicator(
+                    progress = { book.progressFraction },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(4.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = Color.Black.copy(alpha = 0.2f),
+                )
+            }
+            bookStatusLabel(book)?.let { status ->
+                Text(
+                    text = status,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(6.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.92f))
+                        .padding(horizontal = 5.dp, vertical = 1.dp),
+                )
+            }
         }
     }
 }
@@ -842,9 +944,11 @@ private fun progressSummary(book: BookEntity, details: BookDetails?): String {
 }
 
 private fun relativeTime(timestamp: Long): String {
+    val now = System.currentTimeMillis()
+    if (now - timestamp < DateUtils.MINUTE_IN_MILLIS) return "剛剛"
     return DateUtils.getRelativeTimeSpanString(
         timestamp,
-        System.currentTimeMillis(),
+        now,
         DateUtils.MINUTE_IN_MILLIS,
         DateUtils.FORMAT_ABBREV_RELATIVE,
     ).toString()

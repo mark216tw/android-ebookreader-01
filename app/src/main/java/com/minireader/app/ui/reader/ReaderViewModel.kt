@@ -39,6 +39,8 @@ data class ReaderUiState(
     val restoreRatio: Float = 0f,
     val restoreFragment: String? = null,
     val bookProgress: Float = 0f,
+    val chapterRatio: Float = 0f,
+    val language: String? = null,
     val prefs: ReaderPrefs = ReaderPrefs(),
 )
 
@@ -137,6 +139,8 @@ class ReaderViewModel(
                     restoreRatio = resumeRatio,
                     restoreFragment = null,
                     bookProgress = progress,
+                    chapterRatio = resumeRatio,
+                    language = parsed.language,
                 )
                 repository.markOpened(bookId)
             } catch (exception: Exception) {
@@ -150,6 +154,8 @@ class ReaderViewModel(
         }
     }
 
+    fun currentChapterRatio(): Float = currentRatio.coerceIn(0f, 1f)
+
     fun onScroll(ratio: Float) {
         val safeRatio = ratio.coerceIn(0f, 1f)
         currentRatio = safeRatio
@@ -161,7 +167,7 @@ class ReaderViewModel(
         val now = System.currentTimeMillis()
         if (now - lastProgressUiAt >= 700) {
             lastProgressUiAt = now
-            _uiState.value = state.copy(bookProgress = progress)
+            _uiState.value = state.copy(bookProgress = progress, chapterRatio = safeRatio)
         }
 
         persistJob?.cancel()
@@ -261,6 +267,7 @@ class ReaderViewModel(
             restoreRatio = safeRatio,
             restoreFragment = fragment,
             bookProgress = progress,
+            chapterRatio = safeRatio,
         )
         saveSnapshot()
     }

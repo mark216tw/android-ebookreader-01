@@ -49,6 +49,11 @@ enum class TextAlignment(val label: String) {
     JUSTIFY("左右對齊"),
 }
 
+enum class ShelfLayout(val label: String) {
+    GRID("封面"),
+    COMPACT("緊湊"),
+}
+
 enum class ShelfSort(val label: String) {
     ADDED_DESC("加入時間"),
     LAST_READ_DESC("最近閱讀"),
@@ -71,6 +76,8 @@ data class ReaderPrefs(
     val displayMode: DisplayMode = DisplayMode.SYSTEM,
     val keepScreenOn: Boolean = false,
     val sortOrder: ShelfSort = ShelfSort.ADDED_DESC,
+    val shelfLayout: ShelfLayout = ShelfLayout.GRID,
+    val ttsSpeed: Float = 1f,
 ) {
     fun effectiveTheme(systemDark: Boolean): ReaderTheme {
         return if (displayMode.resolveDark(systemDark)) darkTheme else theme
@@ -114,6 +121,8 @@ private object Keys {
     val displayMode = stringPreferencesKey("display_mode")
     val keepScreenOn = booleanPreferencesKey("keep_screen_on")
     val sortOrder = stringPreferencesKey("shelf_sort")
+    val shelfLayout = stringPreferencesKey("shelf_layout")
+    val ttsSpeed = floatPreferencesKey("tts_speed")
 }
 
 private fun Preferences.toReaderPrefs(): ReaderPrefs {
@@ -139,6 +148,8 @@ private fun Preferences.toReaderPrefs(): ReaderPrefs {
         displayMode = enumOrDefault(this[Keys.displayMode], defaults.displayMode),
         keepScreenOn = this[Keys.keepScreenOn] ?: defaults.keepScreenOn,
         sortOrder = enumOrDefault(this[Keys.sortOrder], defaults.sortOrder),
+        shelfLayout = enumOrDefault(this[Keys.shelfLayout], defaults.shelfLayout),
+        ttsSpeed = (this[Keys.ttsSpeed] ?: defaults.ttsSpeed).coerceIn(0.5f, 2f),
     )
 }
 
@@ -156,6 +167,8 @@ private fun androidx.datastore.preferences.core.MutablePreferences.write(prefs: 
     this[Keys.displayMode] = prefs.displayMode.name
     this[Keys.keepScreenOn] = prefs.keepScreenOn
     this[Keys.sortOrder] = prefs.sortOrder.name
+    this[Keys.shelfLayout] = prefs.shelfLayout.name
+    this[Keys.ttsSpeed] = prefs.ttsSpeed
 }
 
 private inline fun <reified T : Enum<T>> enumOrDefault(raw: String?, fallback: T): T {

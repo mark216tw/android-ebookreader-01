@@ -223,6 +223,14 @@ class EpubWebViewController {
         )
     }
 
+    fun scrollToRatio(ratio: Float) {
+        val safeRatio = ratio.coerceIn(0f, 1f)
+        webView?.evaluateJavascript(
+            "window.__mrScrollToRatio && window.__mrScrollToRatio($safeRatio);",
+            null,
+        )
+    }
+
     fun destroy() {
         val view = webView ?: return
         webView = null

@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
+import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -67,8 +68,11 @@ interface TagDao {
     @Query("SELECT * FROM tags WHERE name = :name COLLATE NOCASE LIMIT 1")
     suspend fun findByName(name: String): TagEntity?
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(tag: TagEntity)
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insert(tag: TagEntity)
+
+    @Update
+    suspend fun update(tag: TagEntity)
 
     @Query("DELETE FROM tags WHERE id = :id")
     suspend fun deleteById(id: String)

@@ -1,7 +1,12 @@
 package com.minireader.app.ui.reader
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.view.WindowManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -25,6 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,6 +42,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -43,6 +50,9 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.minireader.app.MiniReaderApp
+import com.minireader.app.data.tts.ReaderTtsPlayback
+import com.minireader.app.data.tts.ReaderTtsService
+import com.minireader.app.data.tts.TtsStatus
 import com.minireader.app.ui.system.SystemBarAppearance
 import com.minireader.app.ui.system.findActivity
 import kotlinx.coroutines.launch
@@ -73,6 +83,126 @@ fun ReaderScreen(
     var showSettings by remember { mutableStateOf(false) }
     var externalUrl by remember { mutableStateOf<String?>(null) }
     var bookmarkExcerpt by remember { mutableStateOf<String?>(null) }
+    var pendingTtsStart by remember { mutableStateOf(false) }
+    var readerReady by remember { mutableStateOf(false) }
+
+    val ttsState by ReaderTtsPlayback.state.collectAsStateWithLifecycle()
+    val currentChapter = state.chapters.getOrNull(state.chapterIndex)
+    val sameTtsTarget = ttsState.bookId == state.book?.id &&
+        ttsState.chapterHref == currentChapter?.href
+    val effectiveTtsStatus = if (sameTtsTarget) ttsState.status else TtsStatus.IDLE
+
+    val startTts: () -> Unit = {
+        val book = state.book
+        val chapter = state.chapters.getOrNull(state.chapterIndex)
+        if (book != null && chapter != null) {
+            ReaderTtsService.start(
+                context = context,
+                bookId = book.id,
+                filePath = book.filePath,
+                chapterHref = chapter.href,
+                chapterTitle = chapter.title,
+                chapterIndex = state.chapterIndex,
+                chapterCount = state.chapters.size,
+                startRatio = viewModel.currentChapterRatio(),
+                language = state.language,
+                speed = state.prefs.ttsSpeed,
+            )
+        }
+    }
+
+    val ttsPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (pendingTtsStart) {
+            pendingTtsStart = false
+            startTts()
+        }
+        if (!granted) {
+            scope.launch {
+                snackbarHost.showSnackbar("未授予通知權限，背景播放控制可能不會顯示")
+            }
+        }
+    }
+
+    val requestStartTts: () -> Unit = {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS,
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            pendingTtsStart = true
+            ttsPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            startTts()
+        }
+    }
+
+    val toggleTts: () -> Unit = {
+        if (sameTtsTarget) {
+            when (ttsState.status) {
+                TtsStatus.PLAYING -> ReaderTtsService.sendAction(
+                    context,
+                    ReaderTtsService.ACTION_PAUSE,
+                )
+                TtsStatus.PAUSED -> ReaderTtsService.sendAction(
+                    context,
+                    ReaderTtsService.ACTION_RESUME,
+                )
+                TtsStatus.PREPARING -> Unit
+                else -> requestStartTts()
+            }
+        } else {
+            requestStartTts()
+        }
+    }
+
+    LaunchedEffect(state.navigationToken) {
+        readerReady = false
+    }
+
+    LaunchedEffect(
+        readerReady,
+        ttsState.status,
+        ttsState.currentChunkIndex,
+        ttsState.ratio,
+        ttsState.bookId,
+        ttsState.chapterHref,
+    ) {
+        if (readerReady &&
+            ttsState.status == TtsStatus.PLAYING &&
+            ttsState.bookId == state.book?.id &&
+            ttsState.chapterHref == state.chapters.getOrNull(state.chapterIndex)?.href
+        ) {
+            controller.scrollToRatio(ttsState.ratio)
+        }
+    }
+
+    LaunchedEffect(ttsState.status, ttsState.error) {
+        if (ttsState.bookId == state.book?.id) {
+            when (ttsState.status) {
+                TtsStatus.COMPLETED -> snackbarHost.showSnackbar("本章朗讀結束")
+                TtsStatus.ERROR -> snackbarHost.showSnackbar(ttsState.error ?: "朗讀失敗")
+                else -> Unit
+            }
+        }
+    }
+
+    LaunchedEffect(
+        state.chapterIndex,
+        state.book?.id,
+        ttsState.chapterHref,
+        ttsState.status,
+    ) {
+        val activeChapter = state.chapters.getOrNull(state.chapterIndex)
+        if (ttsState.isActive &&
+            ttsState.bookId == state.book?.id &&
+            ttsState.chapterHref != activeChapter?.href
+        ) {
+            ReaderTtsService.sendAction(context, ReaderTtsService.ACTION_STOP)
+        }
+    }
 
     DisposableEffect(Unit) {
         val observer = LifecycleEventObserver { _, event ->
@@ -147,7 +277,7 @@ fun ReaderScreen(
                         onScroll = viewModel::onScroll,
                         onInternalLink = viewModel::jumpToPath,
                         onExternalLink = { externalUrl = it },
-                        onReady = {},
+                        onReady = { readerReady = true },
                         onPreviousChapter = viewModel::previousChapter,
                         onNextChapter = viewModel::nextChapter,
                         modifier = Modifier
@@ -167,6 +297,8 @@ fun ReaderScreen(
                         onAddBookmark = { showBookmarks = true },
                         onOpenToc = { showToc = true },
                         onOpenSettings = { showSettings = true },
+                        ttsStatus = effectiveTtsStatus,
+                        onToggleTts = toggleTts,
                     )
 
                 }
@@ -178,8 +310,27 @@ fun ReaderScreen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(bottom = 24.dp),
+                .padding(bottom = if (sameTtsTarget && ttsState.isActive) 88.dp else 24.dp),
         )
+
+        if (sameTtsTarget && ttsState.isActive) {
+            ReaderTtsBar(
+                state = ttsState,
+                colors = colors,
+                onToggle = toggleTts,
+                onStop = {
+                    ReaderTtsService.sendAction(context, ReaderTtsService.ACTION_STOP)
+                },
+                onSpeedChange = { speed ->
+                    viewModel.updatePrefs(state.prefs.copy(ttsSpeed = speed))
+                    ReaderTtsService.setSpeed(context, speed)
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 16.dp),
+            )
+        }
     }
 
     if (showToc) {

@@ -2,18 +2,20 @@
 
 一個以 Kotlin 與 Jetpack Compose 開發的輕量 Android EPUB 閱讀器。所有書籍、封面、閱讀進度、標籤與書籤都保存在裝置本機，不需要帳號，也不依賴雲端服務。
 
-目前提供 `1.0.0-prerelease` 測試版本，適合想要搶先體驗的使用者。此版本為 **Pre-release**，不是正式上線版本。
+目前提供 `1.0.1-prerelease` 測試版本，適合想要搶先體驗的使用者。此版本為 **Pre-release**，不是正式上線版本。
 
 ## 功能特色
 
 - 匯入多本 EPUB，使用檔案 SHA-256 避免重複匯入。
 - 自動解析書名、作者、語言、目錄與封面。
-- 書架網格檢視，顯示封面、閱讀進度、未讀／已讀完狀態與最近閱讀時間。
+- 書架顯示方式可切換封面網格與緊湊清單，顯示閱讀進度、未讀／已讀完狀態與最近閱讀時間。
 - 搜尋書名、作者、標籤；排序支援加入時間、最近閱讀、書名、作者與閱讀進度。
 - 書本詳細資訊：原書名、作者、語言、字數、標籤、閱讀進度、章節、檔案大小、加入時間、最近閱讀與書籤數。
 - 自訂標籤與顏色，可依標籤篩選書籍。
 - 閱讀器支援目錄跳轉、書籤新增／管理、章節切換與閱讀位置記憶。
-- 閱讀工具列顯示全書進度百分比。
+- 朗讀功能使用 Android TextToSpeech，從目前閱讀位置開始，支援暫停／續播、語速調整、背景播放與通知控制。
+- 朗讀時會依目前句子自動捲動畫面，讀完目前章節後停止。
+- 閱讀工具列顯示全書進度百分比，目錄與排版設定收納在「更多」選單。
 - 每篇文章底部提供「上一章／下一章」按鈕。
 - 左右滑動切換章節：向左滑下一章、向右滑上一章；約滑動螢幕寬度 20% 或快速輕甩即可觸發。
 - 顯示模式支援系統、淺色、深色；淺色與深色護眼模式分別記住選擇。
@@ -33,7 +35,7 @@
 
 Pre-release APK：
 
-- [app-prerelease.apk（v1.0.0-prerelease）](https://github.com/mark216tw/android-ebookreader-01/releases/tag/v1.0.0-prerelease)
+- [app-prerelease.apk（v1.0.1-prerelease）](https://github.com/mark216tw/android-ebookreader-01/releases/tag/v1.0.1-prerelease)
 - [所有 Releases](https://github.com/mark216tw/android-ebookreader-01/releases)
 
 安裝前請確認 Android 裝置允許安裝來自未知來源的 APK。此 APK 使用 Android Debug 金鑰簽署，僅供測試，不適合正式上架或長期發行。
@@ -115,8 +117,8 @@ android-ebookreader-01/
 
 ## 版本資訊
 
-- 目前版本：`1.0.0-prerelease`
-- 版本代碼：`1`
+- 目前版本：`1.0.1-prerelease`
+- 版本代碼：`2`
 - 狀態：Pre-release 測試版本
 - 變更紀錄：[CHANGELOG.md](CHANGELOG.md)
 

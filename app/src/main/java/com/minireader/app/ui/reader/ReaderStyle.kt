@@ -286,6 +286,12 @@ object ReaderStyle {
             if (element) element.scrollIntoView();
           };
 
+          window.__mrScrollToRatio = function (ratio) {
+            var doc = document.documentElement;
+            var max = Math.max(0, doc.scrollHeight - window.innerHeight);
+            window.scrollTo(0, max * Math.min(1, Math.max(0, ratio || 0)));
+          };
+
           window.__mrSetChapterNav = function (chapterIndex, chapterCount) {
             var hasPrev = chapterIndex > 0;
             var hasNext = chapterIndex >= 0 && chapterIndex < chapterCount - 1;

@@ -10,16 +10,22 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -44,6 +50,9 @@ import androidx.compose.ui.unit.dp
 import com.minireader.app.data.db.BookmarkEntity
 import com.minireader.app.data.epub.TocEntry
 import com.minireader.app.data.prefs.ReaderPrefs
+import com.minireader.app.data.tts.ReaderTtsState
+import com.minireader.app.data.tts.TtsSpeedOptions
+import com.minireader.app.data.tts.TtsStatus
 import com.minireader.app.ui.icons.AppIcons
 import com.minireader.app.ui.settings.ReaderSettingsContent
 import java.time.Instant
@@ -65,7 +74,10 @@ fun ReaderTopBar(
     onAddBookmark: () -> Unit,
     onOpenToc: () -> Unit,
     onOpenSettings: () -> Unit,
+    ttsStatus: TtsStatus,
+    onToggleTts: () -> Unit,
 ) {
+    var menuOpen by remember { mutableStateOf(false) }
     Surface(color = colors.background.copy(alpha = 0.96f)) {
         Column(Modifier.statusBarsPadding()) {
             Row(
@@ -99,6 +111,33 @@ fun ReaderTopBar(
                     maxLines = 1,
                     modifier = Modifier.padding(horizontal = 6.dp),
                 )
+                IconButton(
+                    onClick = onToggleTts,
+                    enabled = ttsStatus != TtsStatus.PREPARING,
+                ) {
+                    when (ttsStatus) {
+                        TtsStatus.PREPARING -> CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = colors.foreground,
+                        )
+                        TtsStatus.PLAYING -> Icon(
+                            AppIcons.Pause,
+                            contentDescription = "暫停朗讀",
+                            tint = colors.foreground,
+                        )
+                        TtsStatus.PAUSED -> Icon(
+                            AppIcons.Play,
+                            contentDescription = "繼續朗讀",
+                            tint = colors.foreground,
+                        )
+                        else -> Icon(
+                            AppIcons.Speaker,
+                            contentDescription = "開始朗讀",
+                            tint = colors.foreground,
+                        )
+                    }
+                }
                 IconButton(onClick = onAddBookmark) {
                     Icon(
                         AppIcons.Bookmark,
@@ -106,19 +145,39 @@ fun ReaderTopBar(
                         tint = colors.foreground,
                     )
                 }
-                IconButton(onClick = onOpenToc) {
-                    Icon(
-                        Icons.Default.List,
-                        contentDescription = "目錄",
-                        tint = colors.foreground,
-                    )
-                }
-                IconButton(onClick = onOpenSettings) {
-                    Icon(
-                        Icons.Default.Settings,
-                        contentDescription = "排版設定",
-                        tint = colors.foreground,
-                    )
+                Box {
+                    IconButton(onClick = { menuOpen = true }) {
+                        Icon(
+                            Icons.Default.MoreVert,
+                            contentDescription = "更多",
+                            tint = colors.foreground,
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = menuOpen,
+                        onDismissRequest = { menuOpen = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("目錄") },
+                            leadingIcon = {
+                                Icon(Icons.Default.List, contentDescription = null)
+                            },
+                            onClick = {
+                                menuOpen = false
+                                onOpenToc()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("排版設定") },
+                            leadingIcon = {
+                                Icon(Icons.Default.Settings, contentDescription = null)
+                            },
+                            onClick = {
+                                menuOpen = false
+                                onOpenSettings()
+                            },
+                        )
+                    }
                 }
             }
             LinearProgressIndicator(
@@ -378,6 +437,100 @@ fun ReaderSettingsSheet(
             showPreview = false,
         )
     }
+}
+
+@Composable
+fun ReaderTtsBar(
+    state: ReaderTtsState,
+    colors: ReaderColors,
+    onToggle: () -> Unit,
+    onStop: () -> Unit,
+    onSpeedChange: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var speedMenuOpen by remember { mutableStateOf(false) }
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(28.dp),
+        color = colors.background.copy(alpha = 0.97f),
+        contentColor = colors.foreground,
+        shadowElevation = 6.dp,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (state.status == TtsStatus.PREPARING) {
+                Box(
+                    modifier = Modifier.size(48.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = colors.accent,
+                    )
+                }
+            } else {
+                IconButton(onClick = onToggle) {
+                    Icon(
+                        if (state.status == TtsStatus.PAUSED) AppIcons.Play else AppIcons.Pause,
+                        contentDescription = if (state.status == TtsStatus.PAUSED) {
+                            "繼續朗讀"
+                        } else {
+                            "暫停朗讀"
+                        },
+                        tint = colors.accent,
+                    )
+                }
+            }
+            Text(
+                text = when (state.status) {
+                    TtsStatus.PREPARING -> "準備中…"
+                    TtsStatus.PAUSED -> "已暫停"
+                    else -> "朗讀中"
+                },
+                style = MaterialTheme.typography.labelMedium,
+                color = colors.secondary,
+            )
+            Spacer(Modifier.weight(1f))
+            Box {
+                TextButton(onClick = { speedMenuOpen = true }) {
+                    Text(
+                        text = formatTtsSpeed(state.speed),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = colors.foreground,
+                    )
+                }
+                DropdownMenu(
+                    expanded = speedMenuOpen,
+                    onDismissRequest = { speedMenuOpen = false },
+                ) {
+                    TtsSpeedOptions.forEach { speed ->
+                        DropdownMenuItem(
+                            text = { Text(formatTtsSpeed(speed)) },
+                            onClick = {
+                                onSpeedChange(speed)
+                                speedMenuOpen = false
+                            },
+                        )
+                    }
+                }
+            }
+            IconButton(onClick = onStop) {
+                Icon(
+                    AppIcons.Stop,
+                    contentDescription = "停止朗讀",
+                    tint = colors.secondary,
+                )
+            }
+        }
+    }
+}
+
+private fun formatTtsSpeed(speed: Float): String {
+    val value = if (speed % 1f == 0f) speed.toInt().toString() else speed.toString()
+    return "$value×"
 }
 
 private fun formatBookmarkTime(timestamp: Long): String {
